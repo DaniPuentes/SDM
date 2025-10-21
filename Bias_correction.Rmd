@@ -63,12 +63,12 @@ load_pkgs(c( "tidyverse", "terra", "sf", "dismo", "maxnet","geosphere", "scales"
 rm(load_pkgs) # Limpiar espacio 
 ```
 
-bgbhbhhu
+
 ##Load data and files
 
 ```{r}
 # ------------------------------------------------------------
-# World Borders (Vector Data)
+# World Borders (Vector Data) Flop
 
 # This shapefile provides country borders as a base layer
 # to visualize the species range and study region.
