@@ -456,6 +456,8 @@ ggplot(env_data, aes(x = WC01, y = WC12)) +
 
 **4. Knowing how MaxEnt performs its calculations, how do you think this will affect the predictions into these environments (random environment vs. target environment)?**
 
+#Yes, MaxEnt models, calculates the presences vs the background, therefore, if we change the background information it would normally change how maxent calculates the habitat suitability. Hence, changing a random environment to a targeted environment will change the calculations and will eventually affect the predictions.We can see that in the Random Background vs Targeted Background maps, where the distribution has completelly changed, to a significant part at least.  
+
 Now let's train a model using the target background sites and write the prediction raster.
 
 
@@ -616,6 +618,7 @@ p_random + p_target
 
 **5.	What other effects did using the target background sites have on the model prediction? Were these desirable?**
 
+#I belive those were desirable effect. For example, we see that maxent suitability with random background pulls suitability to the sites where there is currently sampling areas. When we overcome the sampling area bias by extracting from other backgrounds we can see that we have suitability crossing a political border that most likely could not have a real impact on species distribution, just a sample bias. 
 
 ## Bias Background – Correction Based on Sampling Effort (Road Density)
 
