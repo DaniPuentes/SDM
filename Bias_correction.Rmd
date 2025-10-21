@@ -204,6 +204,7 @@ ggplot() +
     axis.title = element_text(size = 10)
   )
 
+#Mapear los bg points si hay tiempo
 ```
 
 
