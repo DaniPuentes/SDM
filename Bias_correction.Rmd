@@ -246,8 +246,13 @@ ggplot(env_data, aes(x = WC01, y = WC12, color = Type)) +
 
 ```
 
-
 **1. Where might the model become bias in geographic space? How would this affect the model's ability to capture the species' response to our chosen variables (WC03, WC10, WC15, and WC19--see the WORLDCLIM site for definitions)?** 
+
+BIO3 = Isothermality (BIO2/BIO7) (×100)
+BIO10 = Mean Temperature of Warmest Quarter
+BIO15 = Precipitation Seasonality (Coefficient of Variation)
+BIO19 = Precipitation of Coldest Quarter
+
 
 **2. Where might the model become biased in environmental space? What portions of environmental space will be over-represented and what portions under-represented?**
 
