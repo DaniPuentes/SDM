@@ -1,0 +1,1660 @@
+---
+title: "Bias Correction"
+author: Original version from "Adam B. Smith, Danielle Svehla & Camilo Sanín"
+date: "July 24, 2017"
+output: html_document
+---
+Adapted by Johan Calderón. Date: October 2025
+
+
+# Introduction
+
+Biased data produces biased model. Records can display bias because they represent the haphazard collation of collectors who were conducting their research for their purposes. As a result, specimens tend to be located near roads, universities, and cities. This geographic bias can cause records to be biased in environmental space where the model actually operates. Likewise, collectors might bias collections towards environments that are nice to work in or offer a higher chance of supporting their species of interest. This is a direct form of bias that also affects model output.
+
+In this exercise you will learn:
+1.	How to inspect for potential bias in geographic and environmental space.
+2.	Four methods for correcting for bias in sampling of presence sites. These include
+•	Using target background sites in place of random background sites
+•	Using a bias grid that reflects probability of sampling to generate background sites
+•	Geographic thinning of presence sites
+•	Environmental thinning of presence sites
+
+
+## Install and Load Required Packages
+```{r, warning=FALSE, message=FALSE}
+# This step ensures all required packages are installed and loaded.
+# These packages are essential for spatial data handling,
+# species distribution modeling, and visualization.
+
+# cran_pkgs <- c(
+#   "terra", "sf", "dismo", "maxnet",
+#   "geosphere", "scales", "patchwork", "spThin", "tidyterra"
+# )
+# 
+# # Check which packages are missing
+# missing_cran <- cran_pkgs[!(cran_pkgs %in% installed.packages()[, "Package"])]
+# 
+# # Install missing packages (only the ones not yet installed)
+# if (length(missing_cran) > 0) {
+#   cat("Installing missing CRAN packages:\n", paste(missing_cran, collapse = ", "), "\n")
+#   install.packages(missing_cran, dependencies = TRUE)
+# }
+# 
+# # Load all required packages into the session
+# 
+# library(tidyverse)   # Data manipulation and visualization
+# library(terra)       # Raster and spatial data handling (modern alternative to raster)
+# library(sf)          # Spatial vector data (modern alternative to sp)
+# library(dismo)       # Species distribution modeling utilities
+# library(maxnet)      # MaxEnt algorithm implementation
+# library(geosphere)   # Geographic distance calculations
+# library(scales)      # Visual scaling tools (for transparency, color gradients, etc.)
+# library(patchwork)   # Combine multiple ggplots
+# library(spThin)      # Spatial thinning of occurrence points
+# library(tidyterra)   # ggplot2 integration for terra objects
+
+load_pkgs <- function(pkgs) {
+  for (p in pkgs) {
+    if (!require(p, character.only = TRUE)) {
+     install.packages(p)
+      library(p, character.only = TRUE)
+    }}}
+load_pkgs(c( "tidyverse", "terra", "sf", "dismo", "maxnet","geosphere", "scales", "spThin", "tidyterra"))
+rm(load_pkgs) # Limpiar espacio 
+```
+
+
+##Load data and files
+
+```{r}
+# ------------------------------------------------------------
+# World Borders (Vector Data)
+
+# This shapefile provides country borders as a base layer
+# to visualize the species range and study region.
+
+countries <- st_read(
+  dsn = "data/World Borders Dataset/TM_WORLD_BORDERS-0.3.shp",
+  quiet = TRUE
+)
+
+# ------------------------------------------------------------
+# Species Records
+
+# Load the cleaned occurrence dataset:
+# “Eliminated All But One Record Per Cell” means only one
+# record per raster cell is kept to avoid spatial autocorrelation.
+
+records <- readRDS("data/05 Species Records - Eliminated All But One Record Per Cell.rds")
+
+# Convert to a simple features (sf) object with geographic coordinates (WGS84)
+records_sf <- st_as_sf(
+  records,
+  coords = c("longitude", "latitude"),
+  crs = 4326
+)
+
+# ------------------------------------------------------------
+# Species Range Map (IUCN Polygon)
+
+# The range map shows the known distribution of the species,
+# usually from IUCN or expert sources.
+
+rangeMap <- st_read(
+  dsn = "data/Urocitellus columbianus/urocitellusColumbianus_iucnRangeMap.shp",
+  quiet = TRUE
+)
+
+# ------------------------------------------------------------
+# Study Region Extent and Background Points
+
+# These RData files contain:
+# - study_extent: the polygon or bounding box for the study area
+# - bg_sites: random background (pseudoabsence) points across the region
+
+load("data/Study Region Extent.Rdata")                   # object: study_extent
+load("data/Random Background Sites across Study Region.Rdata")  # object: bg_sites
+
+# ------------------------------------------------------------
+# Select Environmental Predictors
+
+# Define which environmental variables (e.g., bioclimatic variables)
+# will be used in the modeling process.
+
+predictors <- c("WC03", "WC10", "WC15", "WC19")
+
+# ------------------------------------------------------------
+# Environmental Layers
+
+# These layers represent the environmental conditions used
+# to model species distributions (elevation + climate).
+
+# Load elevation raster
+elev <- rast("data/elevation.tif")
+
+# Load all bioclimatic variables (.tif files) within the study region
+bioclim_files <- list.files(
+  "data/Study Region",
+  pattern = "\\.tif$",
+  full.names = TRUE
+)
+
+bioclim_stack <- rast(bioclim_files)
+
+# Combine elevation and climate variables into a single object
+climate <- c(elev, bioclim_stack)
+
+# ------------------------------------------------------------
+# Manual Predictor Selection Map
+
+# This raster represents a previously generated MaxEnt prediction
+# used here for reference or manual comparison.
+
+manualSelectMap <- rast("data/maxentPrediction1970to2000.tif")
+
+# ------------------------------------------------------------
+# Align Coordinate Systems and Define Map Extent
+
+# It’s essential that all spatial objects share the same coordinate reference system (CRS)
+# to overlay them correctly in maps and analyses.
+
+countries <- st_transform(countries, st_crs(rangeMap))  # Match CRS to range map
+bbox <- st_bbox(rangeMap)                               # Define bounding box for plotting
+
+```
+
+
+# Exploring bias
+
+Let's look at the distribution of records in geographic and environmental space.
+
+```{r}
+# ------------------------------------------------------------
+# Species Range Map with Occurrence Points
+# ------------------------------------------------------------
+# This visualization shows:
+# - Global country borders (gray)
+# - The IUCN range polygon (green)
+# - The occurrence records (points)
+
+ggplot() +
+  geom_sf(data = countries, fill = "gray90", color = "white") +
+  geom_sf(data = rangeMap,
+          fill = alpha("mediumseagreen", 0.6),
+          color = "darkgreen", linewidth = 0.7) +
+  geom_sf(data = records_sf,
+          shape = 21, fill = alpha("mediumseagreen", 0.5),
+          color = "black", size = 1.8, stroke = 0.2) +
+  coord_sf(
+    xlim = c(bbox["xmin"]-10, bbox["xmax"]+10),
+    ylim = c(bbox["ymin"]-10, bbox["ymax"]+10),
+    expand = FALSE
+  ) +
+  labs(
+    title = "Species Range – Urocitellus columbianus",
+    x = "Longitude",
+    y = "Latitude"
+  ) +
+  theme_minimal(base_size = 8) +
+  theme(
+    panel.grid = element_line(color = "gray85", linewidth = 0.3),
+    panel.background = element_rect(fill = "aliceblue"),
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    axis.title = element_text(size = 10)
+  )
+
+```
+
+
+```{r}
+# ------------------------------------------------------------
+# Environmental Space (Presences vs. Background)
+# ------------------------------------------------------------
+# This plot represents the distribution of points in environmental space.
+# It compares the climate values of presence points vs. random background points.
+# This helps visualize environmental bias or niche coverage.
+
+# Combine both datasets and add a label for point type
+env_data <- rbind(
+  data.frame(WC01 = randomBg$WC01, WC12 = randomBg$WC12, Type = "Background"),
+  data.frame(WC01 = records$WC01,  WC12 = records$WC12,  Type = "Presences")
+)
+
+# Build the environmental space plot
+ggplot(env_data, aes(x = WC01, y = WC12, color = Type)) +
+  geom_point(alpha = 0.6, size = 2) +
+  scale_color_manual(
+    values = c(
+      "Background" = alpha("gray", 0.5),
+      "Presences"  = alpha("mediumseagreen", 0.7)
+    )
+  ) +
+  labs(
+    x = "MAT (°C)",   # Mean Annual Temperature
+    y = "MAP (mm)",   # Mean Annual Precipitation
+    title = "Environmental Space",
+    color = NULL
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.grid = element_line(color = "gray90"),
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    legend.position = "top"
+  )
+
+```
+
+
+**1. Where might the model become bias in geographic space? How would this affect the model's ability to capture the species' response to our chosen variables (WC03, WC10, WC15, and WC19--see the WORLDCLIM site for definitions)?** 
+
+**2. Where might the model become biased in environmental space? What portions of environmental space will be over-represented and what portions under-represented?**
+
+
+Obviously, we seem to lack records from the Canadian portion of the range. This presents an extreme version of bias--it appears the species resides there, but we have very little data to model its response in the area lacking records. In this case we would suggest 1) looking for more records; and if that did not help; 2) just interpreting the model output for the US-portion of the range.
+
+
+## Bias correction using target background sites
+
+Using randomly located background sites to train Maxent presumes that presence sites were sampled such that each real presence had an equal probability of being sampled--i.e., in an unbiased manner. One way to correct for bias in presences is to include the same kind of bias in background sites. The two biases then cancel one another out.
+
+Phillips et al. (2009) propose using target background sites, which are presences of other species that could have been recorded given the methods used to observe the focal species. Those sites were downloaded from GBIF for this workshop. It will be used presence sites of other ground squirrels in western North America. This includes genera from *Urocitellus* plus *Ammospermophilus*, *Callospermophilus*, *Poliocitellus*, *Xerospermophilus*, *Ictidomys*, and *Otospermophilus*. 
+
+
+```{r}
+# ------------------------------------------------------------
+# Obtain GBIF Data for Other Ground Squirrels
+
+# This dataset contains occurrence points from other *Spermophilus* species
+# (ground squirrels), which will be used to define a "target-group background".
+# Using background points from taxonomically related species helps
+# reduce sampling bias that can occur when background points are drawn randomly.
+
+load("data/Target Background Sites Drawn from All Spermophilus Downloaded from GBIF.Rdata")
+# The object 'targetBg' will now be available in memory.
+# It contains coordinates for GBIF occurrences of related species.
+
+# ------------------------------------------------------------
+# Convert Data Frames to Spatial Objects (sf)
+
+# Convert all coordinate data to simple feature (sf) objects.
+# The Coordinate Reference System (CRS) is set to match the range map.
+
+randomBg_sf <- st_as_sf(randomBg, coords = c("longitude", "latitude"), crs = st_crs(rangeMap))
+targetBg_sf <- st_as_sf(targetBg, coords = c("longitude", "latitude"), crs = st_crs(rangeMap))
+records_sf  <- st_as_sf(records,  coords = c("longitude", "latitude"), crs = st_crs(rangeMap))
+
+# ------------------------------------------------------------
+# Define Bounding Box of the Range
+
+# This ensures that maps are zoomed to the species’ distribution.
+bbox <- st_bbox(rangeMap)
+
+# ------------------------------------------------------------
+# Prepare Data for Visualization
+
+# Each dataset (random background, target background, presences)
+# receives a 'Type' label for easy color-based distinction in the map.
+
+randomBg_sf <- randomBg_sf %>%
+  mutate(Type = "Random") %>%
+  dplyr::select(Type, geometry)
+
+targetBg_sf <- targetBg_sf %>%
+  mutate(Type = "Target") %>%
+  dplyr::select(Type, geometry)
+
+records_sf <- records_sf %>%
+  mutate(Type = "Presences") %>%
+  dplyr::select(Type, geometry)
+
+# Combine all points into a single object.
+# 'bind_rows()' allows joining data frames with different columns.
+points_all <- bind_rows(randomBg_sf, targetBg_sf, records_sf)
+
+# ------------------------------------------------------------
+# Plot: Random vs Target Background and Presences
+
+# This map shows the difference between random and target background sampling,
+# along with actual occurrence records.
+# - Random background: points sampled from the entire study region
+# - Target background: points from related species (to correct for bias)
+# - Presences: occurrences of the focal species
+
+ggplot() +
+  geom_sf(data = countries, fill = "white", color = "gray85") +
+  geom_sf(data = rangeMap,
+          fill = alpha("khaki", 0.5),
+          color = "darkgoldenrod", linewidth = 0.6) +
+  geom_sf(data = points_all, aes(color = Type), size = 0.8, alpha = 0.4) +
+  coord_sf(
+    xlim = c(bbox["xmin"]-5, bbox["xmax"]+5),
+    ylim = c(bbox["ymin"]-5, bbox["ymax"]+5),
+    expand = FALSE
+  ) +
+  scale_color_manual(
+    name = "Data Type",
+    values = c(
+      "Random"   = alpha("gray", 0.4),
+      "Target"   = alpha("black", 0.5),
+      "Presences" = alpha("red", 0.7)
+    )
+  ) +
+  labs(
+    title = "Random vs Target Background and Presences",
+    x = "Longitude",
+    y = "Latitude"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.background = element_rect(fill = "aliceblue"),
+    panel.grid = element_line(color = "gray90", linewidth = 0.1),
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    legend.position = "top"
+  )
+
+```
+
+
+**3. Where does most collection activity tend to occur? Does it seem to reflect the same bias we think we see in the ground squirrel's records?**
+
+Now let's examine the distribution of target background sites in environmental space.
+
+
+```{r}
+# ------------------------------------------------------------
+# Visualizing Backgrounds in Environmental Space
+# ------------------------------------------------------------
+# This step compares the *Random* vs *Target* background samples
+# in environmental space (temperature–precipitation), showing how
+# the choice of background affects the representation of conditions
+# available to the species.
+
+# ------------------------------------------------------------
+# Prepare Data for Plotting
+
+# Define axis limits based on the range of environmental conditions
+# across all random background points.
+# These will be applied to both panels for consistent comparison.
+xlim_vals <- range(randomBg$WC01, na.rm = TRUE)
+ylim_vals <- range(randomBg$WC12, na.rm = TRUE)
+
+# ------------------------------------------------------------
+# Build separate datasets for each type of point
+
+# Random background: points drawn uniformly across the study region
+random_env <- randomBg %>%
+  mutate(Type = "Random", Set = "Random Background") %>%
+  dplyr::select(WC01, WC12, Type, Set)
+
+# Target background: points from related *Spermophilus* species
+# (used to reduce geographic and sampling bias)
+target_env <- targetBg %>%
+  mutate(Type = "Target", Set = "Target Background") %>%
+  dplyr::select(WC01, WC12, Type, Set)
+
+# Presence records: the focal species’ occurrences
+records_env <- records %>%
+  mutate(Type = "Species", Set = "Random Background") %>%  # will appear in both panels
+  dplyr::select(WC01, WC12, Type, Set)
+
+# Duplicate presences so they appear in both “Random” and “Target” panels
+records_env_target <- records_env %>%
+  mutate(Set = "Target Background")
+
+# Combine all points into a single data frame
+env_data <- bind_rows(random_env, target_env, records_env, records_env_target)
+
+# ------------------------------------------------------------
+# Plot: Environmental Space – Random vs Target Backgrounds
+
+# The plot shows two panels (facets):
+#  - Left: presences within the random background
+#  - Right: presences within the target background
+# This visualization helps identify whether target-group backgrounds
+# better match the environmental space where the species occurs.
+
+ggplot(env_data, aes(x = WC01, y = WC12)) +
+  # Random background points (gray)
+  geom_point(
+    data = subset(env_data, Type == "Random"),
+    color = alpha("darkgray", 0.1), size = 1
+  ) +
+  # Target background points (darker gray)
+  geom_point(
+    data = subset(env_data, Type == "Target"),
+    color = alpha("darkgray", 0.1), size = 1
+  ) +
+  # Species presences (red)
+  geom_point(
+    data = subset(env_data, Type == "Species"),
+    shape = 21,
+    fill = alpha("red", 0.5),
+    color = "red",
+    size = 2,
+    stroke = 0.2
+  ) +
+  # Facet panels to compare the two background strategies
+  facet_wrap(~Set, ncol = 2) +
+  scale_x_continuous(limits = xlim_vals, name = "MAT (°C)") +  # Mean Annual Temperature
+  scale_y_continuous(limits = ylim_vals, name = "MAP (mm)") +  # Mean Annual Precipitation
+  labs(
+    title = "Environmental Space – Random vs Target Backgrounds"
+  ) +
+  theme_minimal(base_size = 9) +
+  theme(
+    panel.grid = element_line(color = "gray90"),
+    strip.text = element_text(face = "bold"),
+    plot.title = element_text(face = "bold", hjust = 0.5)
+  ) +
+  # Remove redundant legends and suppress minor ggplot warnings
+  guides(color = "none", fill = "none") +
+  annotate("point", x = Inf, y = Inf, size = 0)
+
+```
+
+
+**4. Knowing how MaxEnt performs its calculations, how do you think this will affect the predictions into these environments (random environment vs. target environment)?**
+
+Now let's train a model using the target background sites and write the prediction raster.
+
+
+```{r}
+# ------------------------------------------------------------
+# Model Fitting and Visualization – Bias Correction with Target Background
+# ------------------------------------------------------------
+# This section compares species distribution models built using:
+#  (1) Random background points, and
+#  (2) Target-group background points (from related species).
+# The goal is to show how background choice affects predicted suitability.
+
+# ------------------------------------------------------------
+# Fit the MaxEnt Model Using Target Background
+
+# Combine presence (records) and target background points into one dataset.
+# 'presBg' is a binary vector: 1 = presence, 0 = background.
+
+trainData <- rbind(records[, predictors], targetBg[, predictors])
+presBg <- c(rep(1, nrow(records)), rep(0, nrow(targetBg)))
+
+# Fit a MaxEnt model using the maxnet package
+targetBgModel <- maxnet(p = presBg, data = trainData)
+
+# Save the trained model to a dedicated folder
+outdir <- "Models/Model 03 Bias Correction - Target Background"
+dir.create(outdir, recursive = TRUE, showWarnings = FALSE)
+save(targetBgModel, file = file.path(outdir, "Model.Rdata"), compress = TRUE)
+
+# ------------------------------------------------------------
+# Predict Suitability Across the Study Area
+
+# Subset the raster layers to match the predictors used in training.
+climate_sub <- climate[[predictors]]
+names(climate_sub) <- predictors
+
+# ------------------------------------------------------------
+# Create a "Safe Predict" Wrapper Function
+
+# Some pixels may have missing environmental data (NA).
+# This wrapper ensures predictions are made only for complete cases.
+
+safe_predict <- function(model, data) {
+  data <- as.data.frame(data)
+  data[] <- lapply(data, as.numeric)
+  ok <- stats::complete.cases(data)
+  preds <- rep(NA_real_, nrow(data))
+  if (any(ok)) {
+    preds[ok] <- predict(model, data[ok, , drop = FALSE], type = "cloglog")
+  }
+  return(preds)
+}
+
+# ------------------------------------------------------------
+# Generate Suitability Map Using terra::predict
+
+# Predicts habitat suitability (0–1) for each raster cell in memory.
+targetBgMap <- terra::predict(
+  object   = climate_sub,
+  model    = targetBgModel,
+  fun      = safe_predict,
+  wopt     = list(datatype = "FLT4S")
+)
+
+# ------------------------------------------------------------
+# Prepare Data for Visualization
+
+# Reload country borders and species range (for clarity and map alignment)
+countries <- st_read("data/World Borders Dataset/TM_WORLD_BORDERS-0.3.shp", quiet = TRUE)
+rangeMap  <- st_read("data/Urocitellus columbianus/urocitellusColumbianus_iucnRangeMap.shp", quiet = TRUE)
+countries <- st_transform(countries, st_crs(rangeMap))
+bbox <- st_bbox(rangeMap)
+
+# Convert raster predictions into data frames for ggplot
+r_df_target <- as.data.frame(targetBgMap, xy = TRUE, na.rm = TRUE)
+colnames(r_df_target)[3] <- "suitability"
+
+r_df_random <- as.data.frame(manualSelectMap, xy = TRUE, na.rm = TRUE)
+colnames(r_df_random)[3] <- "suitability"
+
+# ------------------------------------------------------------
+# Define Map Theme (shared by both panels)
+
+theme_map <- theme_minimal(base_size = 11) +
+  theme(
+    panel.background = element_rect(fill = "aliceblue"),
+    panel.grid = element_line(color = "gray90", linewidth = 0.3),
+    plot.title = element_text(face = "bold", hjust = 0.5)
+  )
+
+# ------------------------------------------------------------
+# Plot Panel 1 – Model with Random Background
+
+p_random <- ggplot() +
+  geom_raster(data = r_df_random, aes(x = x, y = y, fill = suitability)) +
+  scale_fill_gradientn(
+    colors = hcl.colors(100, "BrBG"),
+    name = "Suitability"
+  ) +
+  geom_sf(data = countries, fill = NA, color = "gray45", linewidth = 0.3) +
+  geom_sf(data = rangeMap, fill = NA, color = "black", linewidth = 0.4) +
+  geom_point(
+    data = records,
+    aes(x = longitude, y = latitude),
+    shape = 21, fill = "red", color = "black", size = 1.8
+  ) +
+  coord_sf(
+    xlim = c(bbox["xmin"], bbox["xmax"]),
+    ylim = c(bbox["ymin"], bbox["ymax"]),
+    expand = FALSE
+  ) +
+  labs(
+    title = "Random Background",
+    x = "Longitude",
+    y = "Latitude"
+  ) +
+  theme_map
+
+# ------------------------------------------------------------
+# Plot Panel 2 – Model with Target Background
+
+p_target <- ggplot() +
+  geom_raster(data = r_df_target, aes(x = x, y = y, fill = suitability)) +
+  scale_fill_gradientn(
+    colors = hcl.colors(100, "BrBG"),
+    name = "Suitability"
+  ) +
+  geom_sf(data = countries, fill = NA, color = "gray45", linewidth = 0.3) +
+  geom_sf(data = rangeMap, fill = NA, color = "black", linewidth = 0.4) +
+  geom_point(
+    data = records,
+    aes(x = longitude, y = latitude),
+    shape = 21, fill = "red", color = "black", size = 1.8
+  ) +
+  coord_sf(
+    xlim = c(bbox["xmin"], bbox["xmax"]),
+    ylim = c(bbox["ymin"], bbox["ymax"]),
+    expand = FALSE
+  ) +
+  labs(
+    title = "Target Background",
+    x = "Longitude",
+    y = "Latitude"
+  ) +
+  theme_map
+
+# ------------------------------------------------------------
+# Combine Both Panels Side-by-Side
+
+# The two maps allow visual comparison between random and bias-corrected models.
+# You should notice differences in predicted suitability,
+# particularly in regions where background bias was present.
+
+p_random + p_target
+
+```
+
+
+**5.	What other effects did using the target background sites have on the model prediction? Were these desirable?**
+
+
+## Bias Background – Correction Based on Sampling Effort (Road Density)
+
+Related to the target background technique is use of a bias map from which background sites are drawn. The background sites are drawn with a probability proportional to the cells' values. The values are generated in a manner that presumably reflects the sampling bias in the presence sites. How can you generate a bias map? It depends on the species--often bias maps reflect factors expected to correlate with the probability that an area was surveyed for the species. For example, cell values might reflect distance to roads, human population density, etc.
+
+Here we will use a road density map made by NOAA with the expectation that survey effort is a function of vehicular access. The map represents length of roads per unit area. Unfortunately, the map was only created for the United States, so the model should only be interpreted within this country.
+
+
+```{r}
+# This method creates a *bias background* to correct for uneven sampling effort.
+# Areas with higher road density are assumed to have higher sampling intensity,
+# since species are more often recorded near accessible locations.
+
+# ------------------------------------------------------------
+# Read and Preprocess Road Density Raster
+
+# Road density (m/km²) is used as a proxy for sampling bias.
+# The raster will be normalized to create a probability surface
+# where cells with higher road density have a higher probability
+# of being selected as background points.
+
+roadDensity <- rast("data/roadDensity.tif")
+
+terra::plot(
+  roadDensity,
+  main = "Road Density (m/km²)",
+  cex.main = 1.4,
+  col = hcl.colors(100, "viridis", rev = TRUE),
+  axes = TRUE
+)
+
+# Clean up values
+roadDensity[roadDensity < 0] <- 0     # Remove negative values
+roadDensity[is.na(roadDensity)] <- 0  # Replace NA with 0
+
+# Normalize so that all cell values sum to 1 (probability surface)
+total_val <- global(roadDensity, "sum", na.rm = TRUE)[1, 1]
+prob_rast <- roadDensity / total_val
+
+# ------------------------------------------------------------
+# Weighted Random Sampling (Bias-Corrected Background)
+
+# Points are drawn with probability proportional to road density.
+# This way, areas that are more frequently sampled (roads) contribute
+# more background points, mimicking sampling effort patterns.
+
+# Convert to data frame for sampling
+prob_df <- as.data.frame(prob_rast, xy = TRUE, na.rm = TRUE)
+names(prob_df)[3] <- "prob"
+
+# Remove zero or invalid probabilities
+prob_df <- subset(prob_df, is.finite(prob) & prob > 0)
+
+# Draw 11,000 random points, weighted by probability
+set.seed(123)
+sel <- sample(
+  seq_len(nrow(prob_df)),
+  size = 11000,
+  replace = TRUE,
+  prob = prob_df$prob
+)
+
+# Extract selected coordinates
+bias_df <- prob_df[sel, c("x", "y")]
+
+# Convert to spatial object (terra::vect)
+biasSites <- vect(bias_df, geom = c("x", "y"), crs = "EPSG:4326")
+
+# ------------------------------------------------------------
+# Extract Environmental Variables at Selected Sites
+
+# Environmental values from the climate layers are extracted
+# for each bias-corrected background point.
+
+biasEnv <- terra::extract(climate, biasSites)
+
+# Remove rows with missing values (complete cases only)
+biasEnv <- biasEnv[complete.cases(biasEnv), , drop = FALSE]
+
+# Match coordinates after filtering
+bias_df <- bias_df[as.numeric(rownames(biasEnv)), ]
+
+# Combine coordinates and extracted variables
+biasBg <- cbind(bias_df, biasEnv)
+names(biasBg)[1:2] <- c("longitude", "latitude")
+
+# ------------------------------------------------------------
+# Save the Bias-Corrected Background Dataset
+
+out_file <- "data/Background Sites/Bias Background Sites Drawn from Road Density.Rdata"
+dir.create(dirname(out_file), recursive = TRUE, showWarnings = FALSE)
+save(biasBg, file = out_file, compress = TRUE)
+
+```
+
+
+```{r}
+# ------------------------------------------------------------
+# Visualize Bias-Selected Background vs. Species Occurrences
+
+# This plot shows where the bias background points (weighted by road density)
+# fall relative to the observed species occurrences.
+# It helps visualize how background sampling now reflects probable observer effort.
+
+# Convert to sf for ggplot visualization
+bias_sf    <- st_as_sf(biasBg, coords = c("longitude", "latitude"), crs = 4326)
+records_sf <- st_as_sf(records, coords = c("longitude", "latitude"), crs = 4326)
+
+bbox <- st_bbox(rangeMap)
+
+ggplot() +
+  # Base map layers
+  geom_sf(data = countries, fill = "gray95", color = "white") +
+  geom_sf(data = rangeMap, fill = NA, color = "black", linewidth = 0.4) +
+  
+  # Bias background (blue)
+  geom_sf(
+    data = bias_sf,
+    aes(color = "Bias background"),
+    size = 0.6, alpha = 0.5
+  ) +
+  
+  # Species occurrences (red)
+  geom_sf(
+    data = records_sf,
+    aes(color = "Species occurrences"),
+    shape = 21, fill = alpha("red", 0.6), color = "black", size = 1.4, stroke = 0.3
+  ) +
+  
+  # Map extent (focus on species range)
+  coord_sf(
+    xlim = c(bbox["xmin"], bbox["xmax"]),
+    ylim = c(bbox["ymin"], bbox["ymax"]),
+    expand = FALSE
+  ) +
+  
+  # Titles and labels
+  labs(
+    title = "Bias-Selected Background vs Species Occurrences",
+    x = "Longitude", y = "Latitude", color = NULL
+  ) +
+  
+  # Custom legend colors
+  scale_color_manual(
+    values = c(
+      "Bias background" = alpha("blue", 0.5),
+      "Species occurrences" = "red"
+    ),
+    guide = guide_legend(override.aes = list(size = 2))
+  ) +
+  
+  # Theme settings
+  theme_minimal(base_size = 10) +
+  theme(
+    panel.background = element_rect(fill = "aliceblue"),
+    panel.grid = element_line(color = "gray90", linewidth = 0.3),
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    legend.position = "top",
+    legend.text = element_text(size = 10)
+  )
+
+```
+
+
+```{r}
+# ------------------------------------------------------------
+# Comparing Bias-Corrected vs Random Backgrounds in Environmental Space
+# ------------------------------------------------------------
+# These plots show how background sampling strategy (random vs bias-corrected)
+# affects the representation of environmental conditions available to the species.
+# Both use the same axis limits to allow direct visual comparison.
+
+# Shared axis limits based on full range of environmental values
+xlim_vals <- range(randomBg$WC01, na.rm = TRUE)
+ylim_vals <- range(randomBg$WC12, na.rm = TRUE)
+
+# ------------------------------------------------------------
+# Bias Background vs. Species Occurrences
+
+# In this panel, background points are weighted by road density
+# (bias-corrected background). This creates more background points
+# in areas with higher sampling effort (roads, urban areas).
+
+p_bias <- ggplot() +
+  # Bias background (gray)
+  geom_point(
+    data = biasBg,
+    aes(x = WC01, y = WC12, color = "Bias background"),
+    size = 1.2, alpha = 0.6
+  ) +
+  # Species occurrences (red)
+  geom_point(
+    data = records,
+    aes(x = WC01, y = WC12, color = "Species occurrences"),
+    shape = 21, fill = alpha("red", 0.6), color = "black",
+    size = 1.8, stroke = 0.2
+  ) +
+  # Define colors
+  scale_color_manual(
+    name = NULL,
+    values = c(
+      "Bias background" = alpha("darkgray", 0.6),
+      "Species occurrences" = "red"
+    )
+  ) +
+  scale_x_continuous(limits = xlim_vals, name = "MAT (°C)") +
+  scale_y_continuous(limits = ylim_vals, name = "MAP (mm)") +
+  labs(title = "Weighted by Road Density") +
+  theme_minimal(base_size = 9) +
+  theme(
+    panel.grid = element_line(color = "gray90"),
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    legend.position = "top"
+  )
+
+# ------------------------------------------------------------
+# Random Background vs. Species Occurrences
+
+# In this panel, background points are drawn uniformly at random
+# across the study region (no correction for sampling bias).
+
+p_random <- ggplot() +
+  # Random background (light gray)
+  geom_point(
+    data = randomBg,
+    aes(x = WC01, y = WC12, color = "Random background"),
+    size = 1.2, alpha = 0.25
+  ) +
+  # Species occurrences (red)
+  geom_point(
+    data = records,
+    aes(x = WC01, y = WC12, color = "Species occurrences"),
+    shape = 21, fill = alpha("red", 0.6), color = "black",
+    size = 1.8, stroke = 0.2
+  ) +
+  scale_color_manual(
+    name = NULL,
+    values = c(
+      "Random background" = alpha("gray50", 0.25),
+      "Species occurrences" = "red"
+    )
+  ) +
+  scale_x_continuous(limits = xlim_vals, name = "MAT (°C)") +
+  scale_y_continuous(limits = ylim_vals, name = "MAP (mm)") +
+  labs(title = "Uniform Sampling") +
+  theme_minimal(base_size = 9) +
+  theme(
+    panel.grid = element_line(color = "gray90"),
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    legend.position = "top"
+  )
+
+# ------------------------------------------------------------
+# Combine Both Panels
+
+# The two panels can be compared side by side to evaluate whether
+# the bias-corrected background better represents the environmental
+# conditions where the species was observed.
+
+p_bias + p_random
+
+```
+
+
+Continue modeling using the background sites drawn from the bias (road density) grid:
+
+
+```{r}
+# ------------------------------------------------------------
+# Bias Correction using Bias Background
+# ------------------------------------------------------------
+# This model uses the bias-corrected background points (weighted by road density)
+# to reduce the influence of uneven sampling effort.
+# The goal is to compare this model to one trained with random background points.
+
+# ------------------------------------------------------------
+# Prepare Data
+
+# Combine presence and bias background points.
+# presBg is a binary response vector: 1 = presence, 0 = background.
+trainData <- rbind(records[, predictors], biasBg[, predictors])
+presBg <- c(rep(1, nrow(records)), rep(0, nrow(biasBg)))
+
+# Create an output folder for model results
+outdir <- "Models/Model 04 Bias Correction - Bias Background"
+dir.create(outdir, recursive = TRUE, showWarnings = FALSE)
+
+# ------------------------------------------------------------
+# Fit the MaxEnt (maxnet) Model
+
+# Train the model using the same predictors as before.
+biasBgModel <- maxnet(p = presBg, data = trainData)
+
+# Save model object for reproducibility
+save(biasBgModel,
+     file = file.path(outdir, "Model.Rdata"),
+     compress = TRUE)
+
+# ------------------------------------------------------------
+# Predict Suitability Raster (terra + Safe Wrapper)
+
+climate_sub <- climate[[predictors]]
+names(climate_sub) <- predictors
+
+# Define a safe predict function that handles NA cells properly
+safe_predict <- function(model, data) {
+  data <- as.data.frame(data)
+  data[] <- lapply(data, as.numeric)
+  ok <- complete.cases(data)
+  preds <- rep(NA_real_, nrow(data))
+  if (any(ok)) {
+    preds[ok] <- predict(model, data[ok, , drop = FALSE], type = "cloglog")
+  }
+  preds
+}
+
+# Generate predicted suitability map (values 0–1)
+biasBgMap <- terra::predict(
+  object = climate_sub,
+  model  = biasBgModel,
+  fun    = safe_predict,
+  wopt   = list(datatype = "FLT4S")
+)
+
+# Save raster output
+out_tif <- file.path(outdir, "maxentPrediction1970to2000.tif")
+if (file.exists(out_tif)) unlink(out_tif)
+writeRaster(biasBgMap, out_tif, overwrite = TRUE, gdal = "COMPRESS=LZW")
+
+# ------------------------------------------------------------
+# Prepare Rasters for Plotting
+
+# Convert raster layers to data frames compatible with ggplot
+r_df_bias <- as.data.frame(biasBgMap, xy = TRUE, na.rm = TRUE)
+names(r_df_bias)[3] <- "suitability"
+
+r_df_random <- as.data.frame(manualSelectMap, xy = TRUE, na.rm = TRUE)
+names(r_df_random)[3] <- "suitability"
+
+bbox <- st_bbox(rangeMap)
+
+# Define consistent map theme
+theme_map <- theme_minimal(base_size = 10) +
+  theme(
+    panel.background = element_rect(fill = "aliceblue"),
+    panel.grid = element_line(color = "gray90", linewidth = 0.3),
+    plot.title = element_text(face = "bold", hjust = 0.5)
+  )
+
+# ------------------------------------------------------------
+# Random-Background Map (Baseline Model)
+
+p_random <- ggplot() +
+  geom_raster(data = r_df_random, aes(x = x, y = y, fill = suitability)) +
+  scale_fill_gradientn(
+    colors = hcl.colors(100, "BrBG"),   
+    name = "Suitability"
+  ) +
+  geom_sf(data = countries, fill = NA, color = "gray45", linewidth = 0.3) +
+  geom_sf(data = rangeMap, fill = NA, color = "black", linewidth = 0.4) +
+  geom_point(
+    data = records,
+    aes(x = longitude, y = latitude),
+    shape = 21, fill = "red", color = "black", size = 1.8
+  ) +
+  coord_sf(
+    xlim = c(bbox["xmin"], bbox["xmax"]),
+    ylim = c(bbox["ymin"], bbox["ymax"]),
+    expand = FALSE
+  ) +
+  labs(title = "Random Background", x = "Longitude", y = "Latitude") +
+  theme_map
+
+# ------------------------------------------------------------
+# Bias-Background Map (Bias-Corrected Model)
+
+p_bias <- ggplot() +
+  geom_raster(data = r_df_bias, aes(x = x, y = y, fill = suitability)) +
+  scale_fill_gradientn(
+    colors = hcl.colors(100, "BrBG"),   
+    name = "Suitability"
+  ) +
+  geom_sf(data = countries, fill = NA, color = "gray45", linewidth = 0.3) +
+  geom_sf(data = rangeMap, fill = NA, color = "black", linewidth = 0.4) +
+  geom_point(
+    data = records,
+    aes(x = longitude, y = latitude),
+    shape = 21, fill = "red", color = "black", size = 1.8
+  ) +
+  coord_sf(
+    xlim = c(bbox["xmin"], bbox["xmax"]),
+    ylim = c(bbox["ymin"], bbox["ymax"]),
+    expand = FALSE
+  ) +
+  labs(title = "Bias Background", x = "Longitude", y = "Latitude") +
+  theme_map
+
+# ------------------------------------------------------------
+# Combine Both Panels Side-by-Side
+
+# These two maps let us visually compare habitat suitability patterns
+# under random vs bias-corrected background sampling.
+
+p_random + p_bias
+
+```
+
+
+**6. How do the target background and bias background approaches compare? How do they compare to the model using random background sites? Overall, which seems better?**
+
+
+## Geographic Thinning of Records
+
+Sometimes the only way to remove aggregations of records is to discard some. Records can be thinned in geographic or environmental space. In this portion of the exercise, the records  will be thinned in geographic space.
+
+The general idea behind geographic thinning is that if records are far enough from one another on Earth they will also be more representative in environmental space. But how far apart must they be? We will manually choose a distance based on the distribution of pairwise distances between records.
+
+
+```{r}
+# Geographic thinning helps reduce spatial autocorrelation by
+# removing redundant occurrence points that are too close to each other.
+# This ensures that the model is not biased toward oversampled regions.
+
+# ------------------------------------------------------------
+# Compute All Pairwise Distances (in meters)
+
+# Create a matrix of coordinates (longitude, latitude)
+coord_mat <- as.matrix(records[, c("longitude", "latitude")])
+
+# Compute great-circle distances between all pairs of points (in meters)
+dists <- geosphere::distm(coord_mat, coord_mat)
+
+# ------------------------------------------------------------
+# Clean the Distance Matrix
+
+# We only need unique pairwise distances (upper triangle).
+diag(dists) <- NA                     # remove self-distances
+dists[lower.tri(dists)] <- NA         # remove duplicates
+
+# Convert to vector (in km)
+dists_km <- as.vector(dists) / 1000
+dists_km <- dists_km[!is.na(dists_km)]
+
+# ------------------------------------------------------------
+# Visualize Pairwise Distance Distribution
+
+# This histogram helps determine a reasonable thinning distance.
+ggplot(data.frame(dist_km = dists_km), aes(x = dist_km)) +
+  geom_histogram(
+    bins = 20,
+    fill = "steelblue",
+    color = "white",
+    alpha = 0.8
+  ) +
+  labs(
+    x = "Inter-point Distance (km)",
+    y = "Frequency",
+    title = "Distribution of Pairwise Distances between Records"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5))
+
+```
+
+
+Notice that the number of distances initially increases, peaks ~250 km, then declines. Normally we would stratify by thinning points so they're no closer than half this distance (~125 km). Initially we did indeed try this but found that it removed so many points that the predictions were much worse... since our goal is to demonstrate removal of bias (and presumably production of better models), let's use a smaller distance (50 km) so we have more points remaining.
+
+We can thin the records using the spThin package. The function randomly removes points based on minimum distances. How many records did thinning remove?
+
+
+```{r}
+# ------------------------------------------------------------
+# Apply Spatial Thinning (spThin package)
+
+# The function removes points that are closer than a defined
+# threshold (here, 50 km) to reduce spatial clustering.
+
+# Add a unique ID column if missing
+records$id <- seq_len(nrow(records))
+
+# spThin expects a column for species name
+records$species <- "Urocitellus_columbianus"
+
+# Temporary output directory for thinned results
+dir.create("data/Species Records/thinned_tmp", recursive = TRUE, showWarnings = FALSE)
+
+# Apply geographic thinning
+thin_results <- spThin::thin(
+  loc.data    = records,
+  lat.col     = "latitude",
+  long.col    = "longitude",
+  spec.col    = "species",
+  thin.par    = 50,      # thinning distance (km)
+  reps        = 1,       # number of replicate thinnings
+  write.files = TRUE,    # saves results as CSV
+  out.dir     = "data/Species Records/thinned_tmp",
+  out.base    = "thinned_records",
+  verbose     = TRUE
+)
+
+# Read thinned points
+spatiallyThinnedRecords <- read.csv(
+  "data/Species Records/thinned_tmp/thinned_records_thin1.csv"
+)
+
+# Summary
+cat("Original:", nrow(records),
+    "\nThinned:", nrow(spatiallyThinnedRecords), "\n")
+
+# ------------------------------------------------------------
+# Visualize Before and After Thinning
+
+# Convert thinned data to sf
+thin_sf <- st_as_sf(spatiallyThinnedRecords,
+                    coords = c("longitude", "latitude"),
+                    crs = 4326)
+
+bbox <- st_bbox(rangeMap)
+
+# ---- (A) Unthinned Points ----
+p1 <- ggplot() +
+  geom_sf(data = countries, fill = "white", color = "gray80") +
+  geom_sf(data = rangeMap, fill = NA, color = "black") +
+  geom_sf(
+    data = st_as_sf(records, coords = c("longitude", "latitude"), crs = 4326),
+    shape = 21, fill = alpha("red", 0.6), color = "black", size = 1.8
+  ) +
+  coord_sf(
+    xlim = c(bbox["xmin"], bbox["xmax"]),
+    ylim = c(bbox["ymin"], bbox["ymax"]),
+    expand = FALSE
+  ) +
+  labs(
+    title = paste0("Unthinned Presences (n = ", nrow(records), ")"),
+    x = "Longitude",
+    y = "Latitude"
+  ) +
+  theme_minimal(base_size = 9) +
+  theme(
+    panel.background = element_rect(fill = "aliceblue"),
+    plot.title = element_text(face = "bold", hjust = 0.5)
+  )
+
+# ---- (B) Thinned Points ----
+p2 <- ggplot() +
+  geom_sf(data = countries, fill = "white", color = "gray80") +
+  geom_sf(data = rangeMap, fill = NA, color = "black") +
+  geom_sf(
+    data = thin_sf,
+    shape = 21, fill = alpha("red", 0.6), color = "black", size = 1.8
+  ) +
+  coord_sf(
+    xlim = c(bbox["xmin"], bbox["xmax"]),
+    ylim = c(bbox["ymin"], bbox["ymax"]),
+    expand = FALSE
+  ) +
+  labs(
+    title = paste0("Thinned Presences (n = ", nrow(spatiallyThinnedRecords), ")"),
+    x = "Longitude",
+    y = "Latitude"
+  ) +
+  theme_minimal(base_size = 9) +
+  theme(
+    panel.background = element_rect(fill = "aliceblue"),
+    plot.title = element_text(face = "bold", hjust = 0.5)
+  )
+
+# ---- Combine Maps Side by Side ----
+p1 + p2
+
+```
+
+
+After thinning we are left with just a handful of records. Nonetheless, let's proceed on the assumption that the thinned data best reflects the overall unbiased environmental preferences of the Columbian ground squirrel.
+
+Now, let's model. Note that we will be using the random background sites (i.e., not the target sites or sites from the bias grid) since the presences have presumably had their bias removed.
+
+
+```{r}
+# ------------------------------------------------------------
+# Bias Correction using Spatially Thinned Presences
+# ------------------------------------------------------------
+# Geographic thinning reduces spatial autocorrelation among occurrence points.
+# Here we train a MaxEnt model using only thinned presences to evaluate how
+# spatial filtering affects predicted habitat suitability.
+
+# ------------------------------------------------------------
+# Prepare Thinned Dataset
+
+# Convert thinned occurrence records to SpatVector for terra
+thin_vect <- terra::vect(
+  spatiallyThinnedRecords,
+  geom = c("longitude", "latitude"),
+  crs  = "EPSG:4326"
+)
+
+# Extract predictor values for thinned records
+thin_env <- terra::extract(climate[[predictors]], thin_vect)
+
+# Remove the first column (cell ID created by extract)
+thin_env <- thin_env[, -1, drop = FALSE]
+
+# Combine environmental predictors back with coordinates
+spatiallyThinnedRecords <- cbind(spatiallyThinnedRecords, thin_env)
+
+# ------------------------------------------------------------
+# Combine Thinned Presences + Random Background
+
+trainData <- rbind(
+  spatiallyThinnedRecords[, predictors],
+  randomBg[, predictors]
+)
+
+presBg <- c(
+  rep(1, nrow(spatiallyThinnedRecords)),
+  rep(0, nrow(randomBg))
+)
+
+# Output directory for the model
+outdir <- "Models/Model 05 Bias Correction - Spatially Thinned Presences"
+dir.create(outdir, recursive = TRUE, showWarnings = FALSE)
+
+# ------------------------------------------------------------
+# Fit the MaxEnt (maxnet) Model
+
+spatialThinModel <- maxnet(p = presBg, data = trainData)
+
+# Save model object
+save(spatialThinModel,
+     file = file.path(outdir, "Model.Rdata"),
+     compress = TRUE)
+
+# ------------------------------------------------------------
+# Predict Habitat Suitability Raster
+
+clim_sub <- climate[[predictors]]
+names(clim_sub) <- predictors
+
+# Remove cells with missing predictor data
+mask_sum <- terra::app(clim_sub, fun = sum, na.rm = TRUE)
+clim_sub  <- terra::mask(clim_sub, mask_sum)
+
+# Helper function for safe prediction with missing data
+pred_fun_safe <- function(model, data) {
+  if (is.null(data) || nrow(data) == 0) return(numeric(0))
+  valid_rows <- complete.cases(data)
+  preds <- rep(NA_real_, nrow(data))
+  if (any(valid_rows)) {
+    preds[valid_rows] <- predict(model, data[valid_rows, , drop = FALSE],
+                                 type = "cloglog")
+  }
+  return(preds)
+}
+
+# Predict suitability raster
+out_tif <- file.path(outdir, "maxentPrediction1970to2000_v3.tif")
+
+if (file.exists(out_tif)) try(file.remove(out_tif), silent = TRUE)
+
+spatialThinMap <- terra::predict(
+  object   = clim_sub,
+  model    = spatialThinModel,
+  fun      = pred_fun_safe,
+  filename = out_tif,
+  overwrite = TRUE,
+  wopt = list(datatype = "FLT4S", gdal = c("COMPRESS=LZW"))
+)
+
+# ------------------------------------------------------------
+# Plot: Unthinned vs Thinned Presences
+
+# Convert presence data to sf for ggplot
+records_sf <- st_as_sf(records, coords = c("longitude", "latitude"), crs = 4326)
+thin_sf    <- st_as_sf(spatiallyThinnedRecords,
+                       coords = c("longitude", "latitude"), crs = 4326)
+bbox <- st_bbox(rangeMap)
+
+# Retrieve raster layer name for plotting
+raster_name <- names(spatialThinMap)[1]
+
+# Terrain-style suitability color scale (natural gradient)
+custom_scale <- scale_fill_gradientn(
+  name = "Suitability",
+  colors = hcl.colors(100, "BrBG"),
+  limits = c(0, 1),
+  na.value = "transparent"
+)
+
+# --- (A) Unthinned Presences ---
+p1 <- ggplot() +
+  geom_spatraster(data = spatialThinMap, aes(fill = !!sym(raster_name))) +
+  custom_scale +
+  geom_sf(data = countries, fill = NA, color = "gray80") +
+  geom_sf(data = rangeMap, fill = NA, color = "black") +
+  geom_sf(
+    data = records_sf,
+    shape = 21, fill = alpha("red", 0.6), color = "black", size = 1.6
+  ) +
+  coord_sf(
+    xlim = c(bbox["xmin"], bbox["xmax"]),
+    ylim = c(bbox["ymin"], bbox["ymax"]),
+    expand = FALSE
+  ) +
+  labs(
+    title = paste0("Unthinned Presences (n = ", nrow(records), ")"),
+    x = "Longitude",
+    y = "Latitude"
+  ) +
+  theme_minimal(base_size = 9) +
+  theme(
+    panel.background = element_rect(fill = "aliceblue"),
+    plot.title = element_text(face = "bold", hjust = 0.5)
+  )
+
+# --- (B) Thinned Presences ---
+p2 <- ggplot() +
+  geom_spatraster(data = spatialThinMap, aes(fill = !!sym(raster_name))) +
+  custom_scale +
+  geom_sf(data = countries, fill = NA, color = "gray80") +
+  geom_sf(data = rangeMap, fill = NA, color = "black") +
+  geom_sf(
+    data = thin_sf,
+    shape = 21, fill = alpha("red", 0.6), color = "black", size = 1.6
+  ) +
+  coord_sf(
+    xlim = c(bbox["xmin"], bbox["xmax"]),
+    ylim = c(bbox["ymin"], bbox["ymax"]),
+    expand = FALSE
+  ) +
+  labs(
+    title = paste0("Geographically Thinned (n = ", nrow(spatiallyThinnedRecords), ")"),
+    x = "Longitude",
+    y = "Latitude"
+  ) +
+  theme_minimal(base_size = 9) +
+  theme(
+    panel.background = element_rect(fill = "aliceblue"),
+    plot.title = element_text(face = "bold", hjust = 0.5)
+  )
+
+# ------------------------------------------------------------
+# Combine Both Panels
+
+# The two panels allow visual comparison of the effect of thinning.
+# The thinned dataset should appear more evenly distributed, reducing sampling bias.
+
+p1 + p2
+
+```
+
+
+The estimated environmental suitability is now much more evenly spread across the species' range. Unfortunately, removing points reduces sample size. Maxent has some default limits to the complexity with which it can model a species' response to the environment, and these limits are set by sample size. Below 15 records Maxent uses the simplest possible model (a linear model).
+
+**7. What effect does record thinning have on the model output?**
+
+
+## Bias Correction using Environmental Thinning
+
+A third option is to thin in environmental space. Most bias probably exists because of geographic processes. In turn, this leads to bias in environmental space. Thus, geographic bias is the original bias creating the bias in the space the model actually works with. However, sometimes bias can be more environmentally based than geographically based. For example, collectors might target climates that are easier to work in (less hot, less cold, etc.). Even if the original bias is in geographic space, thinning environmentally might make more sense than geographic thinning since the model actually works in environmental, not geographic space.
+
+Sara Varela and colleagues (2014) use simulated species to demonstrate their technique, for which they chose just two variables to define an environmental space for thinning. Here, we will thin in multidimensional environmental space by condensing the predictors to two axes using principal components analysis. We will then divide this space into cells then choose just one record per bin to represent the species. Other ways to do this may also work (e.g., using a set minimum pairwise environmental distance between records, as we used with geographic distance).
+
+
+```{r}
+# Goal: reduce overrepresentation of occurrences in similar
+# environmental conditions, even if geographically distant.
+# This method keeps only one record per environmental “cell”
+# defined by PCA axes (environmental space).
+
+# ------------------------------------------------------------
+# Principal Component Analysis (PCA)
+
+# PCA summarizes environmental predictors into uncorrelated axes.
+# Use scale. = TRUE because variables are on different scales.
+pca <- prcomp(randomBg[, predictors], scale. = TRUE)
+
+# ------------------------------------------------------------
+# Scree Plot – Variance Explained per Component
+
+var_explained <- pca$sdev^2 / sum(pca$sdev^2) * 100
+var_df <- data.frame(PC = paste0("PC", 1:length(var_explained)),
+                     Variance = var_explained)
+
+ggplot(var_df, aes(x = PC, y = Variance)) +
+  geom_col(fill = "gray70") +
+  geom_text(aes(label = sprintf("%.1f%%", Variance)),
+            vjust = -0.3, size = 3) +
+  labs(
+    title = "Variance Explained by Principal Components",
+    x = "Principal Component",
+    y = "Explained Variance (%)"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5))
+
+# ------------------------------------------------------------
+#️ PCA Biplot – Visualizing Environmental Gradients
+
+scores   <- as.data.frame(pca$x)          # site scores (samples)
+loadings <- as.data.frame(pca$rotation)   # variable loadings
+
+# Scale arrows for visibility
+arrow_scale <- 5
+loadings$PC1 <- loadings$PC1 * arrow_scale
+loadings$PC2 <- loadings$PC2 * arrow_scale
+
+ggplot() +
+  geom_point(data = scores, aes(PC1, PC2),
+             color = alpha("gray", 0.3), size = 1) +
+  geom_segment(data = loadings,
+               aes(x = 0, y = 0, xend = PC1, yend = PC2),
+               arrow = arrow(length = unit(0.15, "cm")),
+               color = "firebrick", linewidth = 0.6) +
+  geom_text(data = loadings,
+            aes(x = PC1 * 1.1, y = PC2 * 1.1,
+                label = rownames(loadings)),
+            color = "firebrick", size = 3.5, fontface = "bold") +
+  labs(
+    title = "PCA Biplot – Environmental Space",
+    x = paste0("PC1 (", round(var_explained[1], 1), "%)"),
+    y = paste0("PC2 (", round(var_explained[2], 1), "%)")
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.background = element_rect(fill = "white"),
+    plot.title = element_text(face = "bold", hjust = 0.5)
+  )
+
+```
+
+
+You can see most of the variation in our predictors is explained by the first two axes. Now let's examine the distribution of records in PCA (environmental) space.
+
+
+```{r}
+# ------------------------------------------------------------
+# Project Presences into PCA Space
+
+speciesPca <- predict(pca, newdata = records[, predictors])
+speciesPca <- as.data.frame(speciesPca[, 1:2])
+names(speciesPca) <- c("PC1", "PC2")
+
+# Keep complete cases only
+speciesPca <- speciesPca[complete.cases(speciesPca), ]
+records_ok <- records[complete.cases(speciesPca), ]
+
+# ------------------------------------------------------------
+# Environmental Thinning – One Record per PCA Cell
+
+numBins <- 12   # resolution of environmental grid
+
+# Create grid (bins) along PC1 and PC2
+pc1_breaks <- seq(min(speciesPca$PC1), max(speciesPca$PC1),
+                  length.out = numBins + 1)
+pc2_breaks <- seq(min(speciesPca$PC2), max(speciesPca$PC2),
+                  length.out = numBins + 1)
+
+# Assign each point to a PCA cell
+speciesPca <- speciesPca %>%
+  mutate(
+    bin1 = cut(PC1, breaks = pc1_breaks, include.lowest = TRUE),
+    bin2 = cut(PC2, breaks = pc2_breaks, include.lowest = TRUE),
+    cell = paste(bin1, bin2)
+  )
+
+# Select one occurrence per cell
+set.seed(123)
+thinned_idx <- speciesPca %>%
+  mutate(row_id = row_number()) %>%
+  group_by(cell) %>%
+  slice_sample(n = 1) %>%
+  pull(row_id)
+
+envThinnedRecords <- records_ok[thinned_idx, ]
+thinnedPca <- speciesPca[thinned_idx, 1:2]
+
+cat("Unthinned:", nrow(records_ok),
+    "| Thinned:", nrow(envThinnedRecords),
+    "| Unique cells:", n_distinct(speciesPca$cell), "\n")
+
+# ------------------------------------------------------------
+# Visualization – Environmental Thinning Effect
+
+bgPca <- as.data.frame(predict(pca, newdata = randomBg[, predictors]))[, 1:2]
+names(bgPca) <- c("PC1", "PC2")
+
+ggplot() +
+  geom_vline(xintercept = pc1_breaks, color = alpha("black", 0.1), linewidth = 0.3) +
+  geom_hline(yintercept = pc2_breaks, color = alpha("black", 0.1), linewidth = 0.3) +
+  geom_point(data = bgPca, aes(PC1, PC2, color = "Background"),
+             alpha = 0.15, size = 0.8) +
+  geom_point(data = speciesPca, aes(PC1, PC2, color = "Unthinned"),
+             alpha = 0.4, size = 1.5) +
+  geom_point(data = thinnedPca, aes(PC1, PC2, fill = "Thinned"),
+             shape = 24, color = "black", alpha = 0.6, size = 2) +
+  scale_color_manual(values = c("Background" = "gray40", "Unthinned" = "blue")) +
+  scale_fill_manual(values = c("Thinned" = alpha("red", 0.6))) +
+  labs(
+    title = "Environmental Thinning in PCA Space",
+    subtitle = paste0(
+      "Unthinned n = ", nrow(records_ok),
+      "   |   Thinned n = ", nrow(envThinnedRecords)
+    ),
+    x = paste0("PC1 (", round((pca$sdev^2 / sum(pca$sdev^2))[1] * 100, 1), "%)"),
+    y = paste0("PC2 (", round((pca$sdev^2 / sum(pca$sdev^2))[2] * 100, 1), "%)")
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.background = element_rect(fill = "white"),
+    legend.position = "top",
+    legend.title = element_blank(),
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5)
+  )
+
+```
+
+
+The records are not randomly distributed in environmental space even within the environmental range of the species. This might reflect real differences in preference, or it might reflect collecting bias. We will assume the clustering is due to sampling bias. To this, we created a 2D histogram, tally the number of records in each cell, and randomly select a specific number of records from each cell for modeling.
+
+You can see that the thinned records more evenly represent the conditions experienced by the species within its range. Now let's train a model using the environmentally-thinned records.
+
+
+```{r}
+# ------------------------------------------------------------
+# Train MaxEnt Model with Env-Thinned Presences
+# ------------------------------------------------------------
+trainData <- rbind(envThinnedRecords[, predictors], randomBg[, predictors])
+presBg <- c(rep(1, nrow(envThinnedRecords)), rep(0, nrow(randomBg)))
+
+envThinModel <- maxnet::maxnet(p = presBg, data = trainData)
+
+# Save model
+outdir <- "Models/Model 06 Bias Correction - Env Thinned Presences"
+dir.create(outdir, recursive = TRUE, showWarnings = FALSE)
+save(envThinModel, file = file.path(outdir, "Model.Rdata"), compress = TRUE)
+
+# ------------------------------------------------------------
+# Predict Suitability Raster
+
+clim_sub <- climate[[predictors]]
+names(clim_sub) <- predictors
+
+# Safe prediction wrapper
+maxnet_predict_safe <- function(model, data) {
+  ok <- complete.cases(data)
+  preds <- rep(NA_real_, nrow(data))
+  if (any(ok))
+    preds[ok] <- as.numeric(predict(model, data[ok, ], type = "cloglog"))
+  preds
+}
+
+out_tif <- file.path(outdir, "maxentPrediction1970to2000_v3.tif")
+
+envThinMap <- terra::predict(
+  object   = clim_sub,
+  model    = envThinModel,
+  fun      = maxnet_predict_safe,
+  filename = out_tif,
+  overwrite = TRUE,
+  wopt = list(datatype = "FLT4S", gdal = c("COMPRESS=LZW"))
+)
+
+# ------------------------------------------------------------
+# Compare Geographic and Environmental Thinning Models
+
+bbox <- st_bbox(rangeMap)
+rname1 <- names(spatialThinMap)[1]
+rname2 <- names(envThinMap)[1]
+
+# Consistent terrain palette for clarity
+terrain_scale <- scale_fill_gradientn(
+  name = "Suitability",
+  colors = hcl.colors(100, "BrBG"),
+  limits = c(0, 1),
+  na.value = "transparent"
+)
+
+# (A) Geographic Thinning
+p_left <- ggplot() +
+  geom_spatraster(data = spatialThinMap, aes(fill = !!sym(rname1))) +
+  terrain_scale +
+  geom_sf(data = countries, fill = NA, color = "gray45") +
+  geom_sf(data = rangeMap, fill = NA, color = "black", linewidth = 0.8) +
+  geom_point(data = spatiallyThinnedRecords,
+             aes(longitude, latitude),
+             color = "black", fill = alpha("red", 0.6),
+             shape = 21, size = 1.4) +
+  coord_sf(
+    xlim = c(bbox["xmin"], bbox["xmax"]),
+    ylim = c(bbox["ymin"], bbox["ymax"]),
+    expand = FALSE
+  ) +
+  labs(
+    title = paste0("Geographically Thinned (n = ", nrow(spatiallyThinnedRecords), ")"),
+    x = "Longitude", y = "Latitude"
+  ) +
+  theme_minimal(base_size = 8)
+
+# (B) Environmental Thinning
+p_right <- ggplot() +
+  geom_spatraster(data = envThinMap, aes(fill = !!sym(rname2))) +
+  terrain_scale +
+  geom_sf(data = countries, fill = NA, color = "gray45") +
+  geom_sf(data = rangeMap, fill = NA, color = "black", linewidth = 0.8) +
+  geom_point(data = envThinnedRecords,
+             aes(longitude, latitude),
+             color = "black", fill = alpha("red", 0.6),
+             shape = 21, size = 1.4) +
+  coord_sf(
+    xlim = c(bbox["xmin"], bbox["xmax"]),
+    ylim = c(bbox["ymin"], bbox["ymax"]),
+    expand = FALSE
+  ) +
+  labs(
+    title = paste0("Env. Thinned (n = ", nrow(envThinnedRecords), ")"),
+    x = "Longitude", y = "Latitude"
+  ) +
+  theme_minimal(base_size = 8)
+
+# Combine both maps
+p_left + p_right
+
+```
+
+
+**8.Compare the maps of points thinned geographically to the points thinned environmentally. How are they different and how the same?**
+
+**9.Why do the environmentally thinned points seem to be more spatially clustered?	Which do you think did a better job, thinning geographically or environmentally?**
+
+
+## References
+
+Aiello-Lammens, M. A., Boria, R. A., Radosavljevic, A., Vilela, B., and Anderson, R. P. 2015. spThin: an R package for spatial thinning of species occurrence records for use in ecological niche models. Ecography 38:541-545 (ver. X).
+
+Elith, J., M. Kearney, and S. Phillips. 2010. The art of modeling range-shifting species. Methods in Ecology and Evolution 1:330-342.
+
+Meyer, C., Kreft, H., Guralnick, and Jetz, W. 2015. Global priorities for an effective information basis of biodiversity distributions. Nature Communications 6:8221.
+
+Phillips, S.J., Dudík, M., Elith, J., Graham, C.H., Lehmann, A., Leathwick, J., and Ferrier, S. 2009. Sample selection bias and presence-only distribution models: Implications for background and pseudo-absence data. Ecological Applications 19:181-197.
+
+Varela, S., Anderson, R.P., Garcia-Valdis, R., and Fernandez-Gonz?lez. 2014. Environmental filters reduce the effects of sampling bias and improve predictions of ecological niche models. Ecography 37:1084-1091.
+
