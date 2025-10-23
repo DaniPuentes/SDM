@@ -59,7 +59,7 @@ load_pkgs <- function(pkgs) {
      install.packages(p)
       library(p, character.only = TRUE)
     }}}
-load_pkgs(c( "tidyverse", "terra", "sf", "dismo", "maxnet","geosphere", "scales", "spThin", "tidyterra"))
+load_pkgs(c( "tidyverse", "terra", "sf", "dismo", "maxnet","geosphere", "scales", "spThin", "tidyterra", "patchwork"))
 rm(load_pkgs) # Limpiar espacio 
 #comentario
 ```
@@ -248,16 +248,12 @@ ggplot(env_data, aes(x = WC01, y = WC12, color = Type)) +
 
 **1. Where might the model become bias in geographic space? How would this affect the model's ability to capture the species' response to our chosen variables (WC03, WC10, WC15, and WC19--see the WORLDCLIM site for definitions)?** 
 
-BIO3 = Isothermality (BIO2/BIO7) (×100)
-BIO10 = Mean Temperature of Warmest Quarter
-BIO15 = Precipitation Seasonality (Coefficient of Variation)
-BIO19 = Precipitation of Coldest Quarter
-
+**Respuesta:** El modelo podría volverse sesgado en el espacio geográfico si se basa únicamente en los puntos de presencia verdadera, que están concentrados en áreas específicas dentro del polígono definido por expertos. Como estos puntos representan solo una porción limitada del espacio geográfico y ambiental, el modelo podría sobreajustarse a las condiciones de estas regiones y no capturar toda la gama de respuestas de la especie. Los puntos de fondo (pseudoausencias) cubren un rango más amplio de espacio geográfico y ambiental, ayudando al modelo a distinguir entre condiciones adecuadas e inadecuadas. 
 
 **2. Where might the model become biased in environmental space? What portions of environmental space will be over-represented and what portions under-represented?**
 
 
-Obviously, we seem to lack records from the Canadian portion of the range. This presents an extreme version of bias--it appears the species resides there, but we have very little data to model its response in the area lacking records. In this case we would suggest 1) looking for more records; and if that did not help; 2) just interpreting the model output for the US-portion of the range.
+**Respuesta:** El modelo también podría volverse sesgado en el espacio ambiental si los puntos de presencia no cubren toda la gama de condiciones que experimenta la especie. Las condiciones asociadas con las regiones bien muestreadas—principalmente en la porción de Estados Unidos del rango de distribución—estarán sobrerrepresentadas. Por ejemplo, las temperaturas más cálidas reflejadas en BIO10 (Temperatura media del trimestre más cálido) y la isotermalidad de BIO3 se encuentran principalmente en estas regiones. Mientras tanto, las condiciones de áreas submuestreadas, como climas más fríos y más estacionales en la porción canadiense, representadas en BIO15 (Estacionalidad de la precipitación) y BIO19 (Precipitación del trimestre más frío), estarán subrepresentadas. Así, es posible que el modelo a sobreestime la idoneidad en las condiciones de Estados Unidos y subestimar la capacidad de la especie para tolerar ambientes más fríos y variables en Canadá.
 
 
 ## Bias correction using target background sites
@@ -341,9 +337,9 @@ ggplot() +
   scale_color_manual(
     name = "Data Type",
     values = c(
-      "Random"   = alpha("gray", 0.4),
-      "Target"   = alpha("black", 0.5),
-      "Presences" = alpha("red", 0.7)
+      "Random"   = alpha("gray", 0.75),
+      "Target"   = alpha("black", 0.75),
+      "Presences" = alpha("red", 0.75)
     )
   ) +
   labs(
@@ -360,9 +356,14 @@ ggplot() +
   )
 
 ```
-
+	•	Random background → puntos aleatorios sobre toda la región de estudio.
+	•	Target background → puntos de especies relacionadas, reflejando los sesgos de muestreo reales.
+	•	Presences → puntos reales de la especie focal.
 
 **3. Where does most collection activity tend to occur? Does it seem to reflect the same bias we think we see in the ground squirrel's records?**
+
+**Respuesta:** La mayor parte de la actividad de muestreo se concentra en la porción del rango de la especie correspondiente a Estados Unidos, donde se concentran tanto los puntos de presencia de la especie focal (rojo) como los puntos de fondo de especies relacionadas (negro). Esto indica que el esfuerzo de muestreo no es uniforme a lo largo de todo el rango geográfico de la especie. Entonces, este patrón refleja el mismo sesgo observado en los registros de la especie focal donde las áreas en latitudes más altas, como la porción canadiense del rango, están submuestreadas. 
+
 
 Now let's examine the distribution of target background sites in environmental space.
 
@@ -458,14 +459,14 @@ ggplot(env_data, aes(x = WC01, y = WC12)) +
   annotate("point", x = Inf, y = Inf, size = 0)
 
 ```
-
+Este código visualiza cómo los puntos de fondo aleatorios (Random) y los puntos de fondo del grupo objetivo (Target) se distribuyen en el espacio ambiental, usando temperatura y precipitación como variables principales (WC01 = Mean Annual Temperature, WC12 = Mean Annual Precipitation). El objetivo es ver si los puntos de fondo del grupo objetivo representan mejor las condiciones ambientales donde realmente ocurre la especie, corrigiendo posibles sesgos de muestreo geográfico.
 
 **4. Knowing how MaxEnt performs its calculations, how do you think this will affect the predictions into these environments (random environment vs. target environment)?**
 
-#Yes, MaxEnt models, calculates the presences vs the background, therefore, if we change the background information it would normally change how maxent calculates the habitat suitability. Hence, changing a random environment to a targeted environment will change the calculations and will eventually affect the predictions.We can see that in the Random Background vs Targeted Background maps, where the distribution has completelly changed, to a significant part at least.  
+**Respuesta:** Sí, MaxEnt estima la idoneidad ambiental relativa comparando los registros de presencia con los puntos de fondo. Por lo tanto, si se modifica la información de fondo, los cálculos de idoneidad también cambian. Cambiar de un fondo aleatorio a un fondo de grupo objetivo modifica las condiciones ambientales consideradas disponibles, lo que afecta directamente las predicciones del modelo. En este caso, según los gráficos, es mejor utilizar el fondo de grupo objetivo, ya que sus puntos están más concentrados y coinciden mejor con los valores ambientales de las presencias verdaderas. En cambio, al usar un fondo aleatorio sobre toda la región de estudio, el modelo podría incluir muchas condiciones ambientales que la especie nunca experimentó ni fueron muestreadas, lo que amplía demasiado el rango ambiental considerado y puede sesgar las predicciones de idoneidad.
+
 
 Now let's train a model using the target background sites and write the prediction raster.
-
 
 ```{r}
 # ------------------------------------------------------------
@@ -617,14 +618,15 @@ p_target <- ggplot() +
 # You should notice differences in predicted suitability,
 # particularly in regions where background bias was present.
 
-p_random + p_target
+p_random | p_target
 
 ```
 
 
 **5.	What other effects did using the target background sites have on the model prediction? Were these desirable?**
 
-#I belive those were desirable effect. For example, we see that maxent suitability with random background pulls suitability to the sites where there is currently sampling areas. When we overcome the sampling area bias by extracting from other backgrounds we can see that we have suitability crossing a political border that most likely could not have a real impact on species distribution, just a sample bias. 
+Creo que estos efectos fueron deseables. Por ejemplo, cuando se utiliza un fondo aleatorio, MaxEnt tiende a asignar idoneidad a las áreas donde actualmente hay muestreo, lo que refleja el sesgo de muestreo más que el nicho real de la especie. Al corregir este sesgo usando puntos de fondo de especies relacionadas, la idoneidad predicha se ajusta mejor a las condiciones ambientales realmente ocupadas por la especie. Esto permite que algunas áreas que antes parecían inadecuadas, debido a la falta de muestreo, ahora muestren idoneidad de manera más realista. Además, se reduce la influencia de los límites políticos u otras barreras artificiales en la predicción, reflejando de manera más precisa la distribución potencial de la especie basada en el ambiente.
+
 
 ## Bias Background – Correction Based on Sampling Effort (Road Density)
 
