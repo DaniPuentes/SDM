@@ -4,6 +4,7 @@ author: Original version from "Adam B. Smith, Danielle Svehla & Camilo Sanín"
 date: "July 24, 2017"
 output: html_document
 ---
+
 Adapted by Johan Calderón. Date: October 2025
 
 
@@ -22,24 +23,6 @@ In this exercise you will learn:
 
 ## Install and Load Required Packages
 ```{r, warning=FALSE, message=FALSE}
-# This step ensures all required packages are installed and loaded.
-# These packages are essential for spatial data handling,
-# species distribution modeling, and visualization.
-
-# cran_pkgs <- c(
-#   "terra", "sf", "dismo", "maxnet",
-#   "geosphere", "scales", "patchwork", "spThin", "tidyterra"
-# )
-# 
-# # Check which packages are missing
-# missing_cran <- cran_pkgs[!(cran_pkgs %in% installed.packages()[, "Package"])]
-# 
-# # Install missing packages (only the ones not yet installed)
-# if (length(missing_cran) > 0) {
-#   cat("Installing missing CRAN packages:\n", paste(missing_cran, collapse = ", "), "\n")
-#   install.packages(missing_cran, dependencies = TRUE)
-# }
-# 
 # # Load all required packages into the session
 # 
 # library(tidyverse)   # Data manipulation and visualization
