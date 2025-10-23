@@ -1020,6 +1020,8 @@ p_random + p_bias
 
 **6. How do the target background and bias background approaches compare? How do they compare to the model using random background sites? Overall, which seems better?**
 
+**Respuesta:** El modelo con fondo aleatorio (random background) muestra una mayor idoneidad en las zonas donde existen registros de presencia, reflejando principalmente el sesgo de muestreo. En contraste, tanto el fondo del grupo objetivo (target background) como el fondo sesgado por densidad de carreteras (bias background) corrigen parcialmente ese sesgo, al incorporar información ambiental más representativa del esfuerzo de muestreo. En el caso del bias background, la idoneidad tiende a desplazarse hacia Cánada. Este resultado es una consecuencia de que se evita sobreajustar el modelo a las áreas intensamente muestreadas (Estados Unidos).
+
 
 ## Geographic Thinning of Records
 
