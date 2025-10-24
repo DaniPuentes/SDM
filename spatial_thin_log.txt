@@ -84,3 +84,199 @@ data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_n
 data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
                                    to avoid overwriting.
 Writing file: data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new_new_new_new_new.csv
+********************************************** 
+ Beginning Spatial Thinning.
+ Script Started at: Thu Oct 23 17:07:46 2025
+
+Thinning Parameter Used (in km): 50
+Number of replicates of thinning script: 1
+
+Elapsed time for thinning completion
+0.001 0.002 0.033 0 0
+
+Number of data.frames per locations retained
+loc.cnt df.freq
+16
+1
+Maximum number of records after thinning: 16
+Number of data.frames with max records: 1
+
+**New *.csv file creation:**
+Writing new *.csv files to output directory: data/Species Records/thinned_tmp
+data/Species Records/thinned_tmp/thinned_records_thin1_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+Writing file: data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new_new_new_new_new_new.csv
+********************************************** 
+ Beginning Spatial Thinning.
+ Script Started at: Thu Oct 23 19:22:27 2025
+
+Thinning Parameter Used (in km): 50
+Number of replicates of thinning script: 1
+
+Elapsed time for thinning completion
+0.001 0 0.001 0 0
+
+Number of data.frames per locations retained
+loc.cnt df.freq
+16
+1
+Maximum number of records after thinning: 16
+Number of data.frames with max records: 1
+
+**New *.csv file creation:**
+Writing new *.csv files to output directory: data/Species Records/thinned_tmp
+data/Species Records/thinned_tmp/thinned_records_thin1_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+Writing file: data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new_new_new_new_new_new_new.csv
+********************************************** 
+ Beginning Spatial Thinning.
+ Script Started at: Thu Oct 23 19:26:38 2025
+
+Thinning Parameter Used (in km): 50
+Number of replicates of thinning script: 1
+
+Elapsed time for thinning completion
+0.001 0 0 0 0
+
+Number of data.frames per locations retained
+loc.cnt df.freq
+16
+1
+Maximum number of records after thinning: 16
+Number of data.frames with max records: 1
+
+**New *.csv file creation:**
+Writing new *.csv files to output directory: data/Species Records/thinned_tmp
+data/Species Records/thinned_tmp/thinned_records_thin1_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+Writing file: data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new_new_new_new_new_new_new_new.csv
+********************************************** 
+ Beginning Spatial Thinning.
+ Script Started at: Thu Oct 23 19:28:03 2025
+
+Thinning Parameter Used (in km): 50
+Number of replicates of thinning script: 1
+
+Elapsed time for thinning completion
+0 0 0.001 0 0
+
+Number of data.frames per locations retained
+loc.cnt df.freq
+16
+1
+Maximum number of records after thinning: 16
+Number of data.frames with max records: 1
+
+**New *.csv file creation:**
+Writing new *.csv files to output directory: data/Species Records/thinned_tmp
+data/Species Records/thinned_tmp/thinned_records_thin1_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new_new_new_new_new_new_new_new_new.csv ' already exists. Renaming file 
+                                   to avoid overwriting.
+Writing file: data/Species Records/thinned_tmp/thinned_records_thin1_new_new_new_new_new_new_new_new_new_new_new_new_new_new_new_new.csv

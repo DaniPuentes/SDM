@@ -1,11 +1,29 @@
 ---
 title: "Bias Correction"
-author: Original version from "Adam B. Smith, Danielle Svehla & Camilo Sanín"
-date: "July 24, 2017"
-output: html_document
+subtitle: "Modelos de distribución de especies"
+author: 
+  - "Original version from Adam B. Smith, Danielle Svehla & Camilo Sanín"
+  - "Adapted by Johan Calderón. Date: October 2025"
+  - "Updated by Daniela A. Puentes Herrera & Mateo Cabal"
+date: "2025-10-23"
+output:
+  html_document:
+    theme: cosmo
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    number_sections: false
+    highlight: tango
+    code_folding: hide
+    fig_caption: true
+    df_print: paged
+    code_download: true
+    css: styles.css
+editor_options: 
+  markdown: 
+    wrap: 72
 ---
-
-Adapted by Johan Calderón. Date: October 2025
 
 
 # Introduction
@@ -48,7 +66,7 @@ rm(load_pkgs) # Limpiar espacio
 ```
 
 
-##Load data and files
+## Load data and files
 
 ```{r}
 # ------------------------------------------------------------
@@ -608,7 +626,7 @@ p_random | p_target
 
 **5.	What other effects did using the target background sites have on the model prediction? Were these desirable?**
 
-Creo que estos efectos fueron deseables. Por ejemplo, cuando se utiliza un fondo aleatorio, MaxEnt tiende a asignar idoneidad a las áreas donde actualmente hay muestreo, lo que refleja el sesgo de muestreo más que el nicho real de la especie. Al corregir este sesgo usando puntos de fondo de especies relacionadas, la idoneidad predicha se ajusta mejor a las condiciones ambientales realmente ocupadas por la especie. Esto permite que algunas áreas que antes parecían inadecuadas, debido a la falta de muestreo, ahora muestren idoneidad de manera más realista. Además, se reduce la influencia de los límites políticos u otras barreras artificiales en la predicción, reflejando de manera más precisa la distribución potencial de la especie basada en el ambiente.
+**Respuesta:** Creo que estos efectos fueron deseables. Por ejemplo, cuando se utiliza un fondo aleatorio, MaxEnt tiende a asignar idoneidad a las áreas donde actualmente hay muestreo, lo que refleja el sesgo de muestreo más que el nicho real de la especie. Al corregir este sesgo usando puntos de fondo de especies relacionadas, la idoneidad predicha se ajusta mejor a las condiciones ambientales realmente ocupadas por la especie. Esto permite que algunas áreas que antes parecían inadecuadas, debido a la falta de muestreo, ahora muestren idoneidad de manera más realista. Además, se reduce la influencia de los límites políticos u otras barreras artificiales en la predicción, reflejando de manera más precisa la distribución potencial de la especie basada en el ambiente.
 
 
 ## Bias Background – Correction Based on Sampling Effort (Road Density)
@@ -1362,10 +1380,14 @@ p1 + p2
 
 ```
 
-
 The estimated environmental suitability is now much more evenly spread across the species' range. Unfortunately, removing points reduces sample size. Maxent has some default limits to the complexity with which it can model a species' response to the environment, and these limits are set by sample size. Below 15 records Maxent uses the simplest possible model (a linear model).
 
+Qué hicieron? El objetivo es reducir la autocorrelación espacial y evitar que el modelo se sobreajuste a zonas con mucho muestreo. Entrenaron un nuevo modelo de MaxEnt con los registros ya filtrados y un fondo aleatorio.
+Esto se llama bias correction by spatial filtering.
+
 **7. What effect does record thinning have on the model output?**
+
+**Respuesta:** Observando el modelo de idoneidad de habitat cuando se realiza ajuste de thinning no tiene cambio al mapa sin el ajuste. En este caso pasamos de 29 observaciones a 16 observaciones, no observamos ninguna diferencia. Es decir que los 16 puntos representan lo mismo que los 29 puntos. El impacto de remover estos puntos no quita fuerza de prediccion, ya que esta representado por los otros puntos.
 
 
 ## Bias Correction using Environmental Thinning
@@ -1636,11 +1658,13 @@ p_right <- ggplot() +
 p_left + p_right
 
 ```
-
-
 **8.Compare the maps of points thinned geographically to the points thinned environmentally. How are they different and how the same?**
 
+**Respuesta:** Cuando comparamos el thinning geográfico y el thinning ambiental obtenemos resultados similares. En el thinning ambiental, visualmente produce áreas con menos idoneidad, el thinning geográfico tiene áreas con mayor idoneidad, lo que concuerda con el croquis realizado con la distribución potencial del experto.
+
 **9.Why do the environmentally thinned points seem to be more spatially clustered?	Which do you think did a better job, thinning geographically or environmentally?**
+
+**Respuesta:** Por que la reduccion se realizò en el espacio ambiental, aunque deberia tener algun nivel de concordancia con el espacio geografico, es posible que esta reduccion no concuerde, esos puntos parecen estar cerca geograficamente pero puede que tenga condiciones ambientales diferentes estando cerca geograficamente, por eso observamos puntos en modo de cluster. Si nos guiamos por la opinion del experto, el mapa con reduccion geografica parece producir mas areas idoneas que concuerdan con la prediccion del expero; por otro lado, el numero de datos que quedaron con el thinning geografico deja en duda la robustes del modelo.
 
 
 ## References
